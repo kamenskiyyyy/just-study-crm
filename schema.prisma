@@ -13,15 +13,28 @@ generator client {
 }
 
 model Cart {
-  id               Int            @id @default(autoincrement())
-  user             User?          @relation("Cart_user", fields: [userId], references: [id])
-  userId           Int?           @map("user")
-  subscriptions    Subscription[] @relation("Cart_subscriptions")
-  services         Service[]      @relation("Cart_services")
-  quantityPayments Int?           @default(1)
-  lastModification DateTime       @default(now()) @updatedAt
+  id               Int        @id @default(autoincrement())
+  user             User?      @relation("Cart_user", fields: [userId], references: [id])
+  userId           Int?       @unique @map("user")
+  currency         String     @default("RUB")
+  items            CartItem[] @relation("CartItem_cart")
+  quantityPayments Int?       @default(1)
+  lastModification DateTime   @default(now()) @updatedAt
+}
 
-  @@index([userId])
+model CartItem {
+  id             Int           @id @default(autoincrement())
+  cart           Cart?         @relation("CartItem_cart", fields: [cartId], references: [id])
+  cartId         Int?          @map("cart")
+  subscription   Subscription? @relation("CartItem_subscription", fields: [subscriptionId], references: [id])
+  subscriptionId Int?          @map("subscription")
+  service        Service?      @relation("CartItem_service", fields: [serviceId], references: [id])
+  serviceId      Int?          @map("service")
+  price          Int?
+
+  @@index([cartId])
+  @@index([subscriptionId])
+  @@index([serviceId])
 }
 
 model Category {
@@ -43,32 +56,32 @@ model Category {
 }
 
 model Order {
-  id               Int              @id @default(autoincrement())
-  student          User?            @relation("Order_student", fields: [studentId], references: [id])
-  studentId        Int?             @map("student")
-  leftPayments     Int              @default(1)
-  payments         Payment[]        @relation("Payment_order")
-  employee         User?            @relation("Order_employee", fields: [employeeId], references: [id])
-  employeeId       Int?             @map("employee")
-  status           OrderStatusType? @default(created)
-  subscriptions    Subscription[]   @relation("Order_subscriptions")
-  services         Service[]        @relation("Order_services")
+  id               Int                @id @default(autoincrement())
+  label            String             @default("")
+  student          User?              @relation("Order_student", fields: [studentId], references: [id])
+  studentId        Int?               @map("student")
+  leftPayments     Int                @default(1)
+  currency         String             @default("RUB")
+  payments         Payment[]          @relation("Payment_order")
+  status           OrderStatusType?   @default(created)
+  subscriptions    UserSubscription[] @relation("Order_subscriptions")
+  services         UserService[]      @relation("Order_services")
   amount           Int?
-  createdAt        DateTime         @default(now())
-  lastModification DateTime         @default(now()) @updatedAt
+  createdAt        DateTime           @default(now())
+  lastModification DateTime           @default(now()) @updatedAt
 
   @@index([studentId])
-  @@index([employeeId])
 }
 
 model Payment {
   id               Int               @id @default(autoincrement())
   order            Order?            @relation("Payment_order", fields: [orderId], references: [id])
   orderId          Int?              @map("order")
+  currency         String            @default("RUB")
   student          User?             @relation("Payment_student", fields: [studentId], references: [id])
   studentId        Int?              @map("student")
-  sum              Int?              @default(0)
-  externalId       String            @default("")
+  amount           Int?              @default(0)
+  sessionId        String            @default("")
   receiptId        String            @default("")
   status           PaymentStatusType @default(created)
   createdAt        DateTime          @default(now())
@@ -129,13 +142,16 @@ model User {
   levelStudent                  UserLevelStudentType? @default(a1)
   goal                          String                @default("")
   source                        SourceClient[]        @relation("User_source")
-  role                          UserRoleType?         @default(student)
-  comment                       String                @default("")
+  role                          UserRoleType          @default(student)
+  comment                       String                @default("") @mysql.VarChar(10000)
+  cart                          Cart?                 @relation("Cart_user")
+  magicLinkToken                String                @default("")
   createdAt                     DateTime              @default(now())
   lastModification              DateTime              @default(now()) @updatedAt
-  from_Cart_user                Cart[]                @relation("Cart_user")
+  magicAuthToken                String?
+  magicAuthIssuedAt             DateTime?
+  magicAuthRedeemedAt           DateTime?
   from_Order_student            Order[]               @relation("Order_student")
-  from_Order_employee           Order[]               @relation("Order_employee")
   from_Payment_student          Payment[]             @relation("Payment_student")
   from_ProductReview_student    ProductReview[]       @relation("ProductReview_student")
   from_UserSubscription_student UserSubscription[]    @relation("UserSubscription_student")
@@ -175,81 +191,75 @@ model SourceClient {
 }
 
 model Subscription {
-  id                       Int                @id @default(autoincrement())
-  language                 String             @default("ru")
-  statusView               String             @default("draft")
-  name                     String             @default("")
-  visitCount               Int                @default(10)
-  price                    Int
-  period                   Int?               @default(45)
-  items                    UserSubscription[] @relation("UserSubscription_pattern")
-  createdAt                DateTime           @default(now())
-  lastModification         DateTime           @default(now()) @updatedAt
-  from_Cart_subscriptions  Cart[]             @relation("Cart_subscriptions")
-  from_Order_subscriptions Order[]            @relation("Order_subscriptions")
+  id                         Int        @id @default(autoincrement())
+  language                   String     @default("ru")
+  statusView                 String     @default("draft")
+  name                       String     @default("")
+  description                Json       @default("[{\"type\":\"paragraph\",\"children\":[{\"text\":\"\"}]}]")
+  visitCount                 Int        @default(10)
+  price                      Int
+  period                     Int?       @default(45)
+  createdAt                  DateTime   @default(now())
+  lastModification           DateTime   @default(now()) @updatedAt
+  from_CartItem_subscription CartItem[] @relation("CartItem_subscription")
 
   @@index([language])
 }
 
 model UserSubscription {
-  id               Int           @id @default(autoincrement())
-  pattern          Subscription? @relation("UserSubscription_pattern", fields: [patternId], references: [id])
-  patternId        Int?          @map("pattern")
-  name             String        @default("")
-  visitCount       Int?
-  originalPrice    Int?
-  price            Int?
-  period           Int?
-  status           String        @default("inactive")
-  student          User?         @relation("UserSubscription_student", fields: [studentId], references: [id])
-  studentId        Int?          @map("student")
-  beginDate        DateTime?     @default(now())
-  payed            Int?
-  totalVisited     Int           @default(0)
-  totalBurned      Int           @default(0)
-  manager          User?         @relation("UserSubscription_manager", fields: [managerId], references: [id])
-  managerId        Int?          @map("manager")
-  createdAt        DateTime      @default(now())
-  lastModification DateTime      @default(now()) @updatedAt
+  id                       Int       @id @default(autoincrement())
+  name                     String    @default("")
+  visitCount               Int?
+  originalPrice            Int?
+  price                    Int?
+  period                   Int?
+  status                   String    @default("inactive")
+  student                  User?     @relation("UserSubscription_student", fields: [studentId], references: [id])
+  studentId                Int?      @map("student")
+  beginDate                DateTime? @default(now())
+  payed                    Int?
+  totalVisited             Int       @default(0)
+  totalBurned              Int       @default(0)
+  manager                  User?     @relation("UserSubscription_manager", fields: [managerId], references: [id])
+  managerId                Int?      @map("manager")
+  createdAt                DateTime  @default(now())
+  lastModification         DateTime  @default(now()) @updatedAt
+  from_Order_subscriptions Order[]   @relation("Order_subscriptions")
 
-  @@index([patternId])
   @@index([studentId])
   @@index([managerId])
 }
 
 model Service {
-  id                  Int           @id @default(autoincrement())
-  language            String        @default("ru")
-  statusView          String        @default("draft")
-  name                String        @default("")
-  description         String        @default("")
-  categories          Category[]    @relation("Service_categories")
-  price               Int?          @default(0)
-  items               UserService[] @relation("UserService_pattern")
-  createdAt           DateTime      @default(now())
-  lastModification    DateTime      @default(now()) @updatedAt
-  from_Cart_services  Cart[]        @relation("Cart_services")
-  from_Order_services Order[]       @relation("Order_services")
+  id                    Int        @id @default(autoincrement())
+  language              String     @default("ru")
+  statusView            String     @default("draft")
+  name                  String     @default("")
+  description           Json       @default("[{\"type\":\"paragraph\",\"children\":[{\"text\":\"\"}]}]")
+  categories            Category[] @relation("Service_categories")
+  price                 Int?       @default(0)
+  createdAt             DateTime   @default(now())
+  lastModification      DateTime   @default(now()) @updatedAt
+  from_CartItem_service CartItem[] @relation("CartItem_service")
 
   @@index([language])
 }
 
 model UserService {
-  id               Int      @id @default(autoincrement())
-  pattern          Service? @relation("UserService_pattern", fields: [patternId], references: [id])
-  patternId        Int?     @map("pattern")
-  name             String   @default("")
-  originalPrice    Int?
-  price            Int?
-  student          User?    @relation("UserService_student", fields: [studentId], references: [id])
-  studentId        Int?     @map("student")
-  payed            Int?
-  manager          User?    @relation("UserService_manager", fields: [managerId], references: [id])
-  managerId        Int?     @map("manager")
-  createdAt        DateTime @default(now())
-  lastModification DateTime @default(now()) @updatedAt
+  id                  Int      @id @default(autoincrement())
+  name                String   @default("")
+  originalPrice       Int?
+  status              String   @default("inactive")
+  price               Int?
+  student             User?    @relation("UserService_student", fields: [studentId], references: [id])
+  studentId           Int?     @map("student")
+  payed               Int?
+  manager             User?    @relation("UserService_manager", fields: [managerId], references: [id])
+  managerId           Int?     @map("manager")
+  createdAt           DateTime @default(now())
+  lastModification    DateTime @default(now()) @updatedAt
+  from_Order_services Order[]  @relation("Order_services")
 
-  @@index([patternId])
   @@index([studentId])
   @@index([managerId])
 }

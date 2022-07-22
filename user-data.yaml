@@ -1,8 +1,0 @@
-#cloud-config
-users:
-  - name: username
-    groups: sudo
-    shell: /bin/bash
-    sudo: [ 'ALL=(ALL) NOPASSWD:ALL' ]
-    ssh-authorized-keys:
-      - { { env.SSH_KEY } }

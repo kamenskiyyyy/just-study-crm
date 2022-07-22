@@ -15,9 +15,11 @@ import { Tag } from "./tag";
 import { AvatarUser } from "./avatarUser";
 import { Faq } from "./faq";
 import { Post } from "./post";
+import { CartItem } from "./cartItem";
 
 export const lists = {
   Cart,
+  CartItem,
   Category,
   Order,
   Payment,

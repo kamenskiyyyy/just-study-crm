@@ -3,16 +3,16 @@ import {
   integer,
   relationship,
   select,
+  text,
   virtual,
 } from "@keystone-6/core/fields";
 import { OrderStatusOptions } from "../consts/order-status-options.const";
-import { filterCustomerAccess, filterCustomerAccessCreate } from "../shared";
 import { Lists } from ".keystone/types";
 import { OrderStatus } from "../enums/order-status.enum";
 import { PaymentStatus } from "../enums/payment-status.enum";
 import { createdAt } from "../fields/createdAt";
 import { lastModification } from "../fields/lastModification";
-import format from "date-fns/format";
+import { currency } from "../fields/currency";
 
 export const Order = list({
   ui: {
@@ -20,6 +20,7 @@ export const Order = list({
     description: "Список заказов клиентов",
     listView: {
       initialColumns: [
+        "id",
         "label",
         "status",
         "leftPayments",
@@ -27,38 +28,20 @@ export const Order = list({
         "payed",
         "dept",
         "nextPayment",
-        "employee",
       ],
       pageSize: 20,
     },
   },
   fields: {
-    label: virtual({
-      // @ts-ignore
-      field: graphql.field({
-        type: graphql.String,
-        async resolve(item: Lists.Order.Item, arg, context) {
-          const student = await context.query.User.findOne({
-            where: { id: `${item.studentId}` },
-            query: `name`,
-          });
-          if (student) {
-            return `Order for ${student.name} from ${format(
-              item.createdAt,
-              "dd.MM.yyyy"
-            )}`;
-          }
-          return;
-        },
-      }),
-    }),
+    label: text(),
     student: relationship({ ref: "User" }),
     leftPayments: integer({
       validation: { isRequired: true },
       defaultValue: 1,
+      ui: { description: "Осталось платежей" },
     }),
+    currency,
     payments: relationship({ ref: "Payment.order", many: true }),
-    employee: relationship({ ref: "User", ui: { hideCreate: true } }),
     status: select({
       type: "enum",
       options: OrderStatusOptions,
@@ -66,18 +49,12 @@ export const Order = list({
       defaultValue: OrderStatus.Created,
     }),
     subscriptions: relationship({
-      ref: "Subscription",
+      ref: "UserSubscription",
       many: true,
-      ui: {
-        hideCreate: true,
-      },
     }),
     services: relationship({
-      ref: "Service",
+      ref: "UserService",
       many: true,
-      ui: {
-        hideCreate: true,
-      },
     }),
     amount: integer(),
     payed: virtual({
@@ -87,14 +64,14 @@ export const Order = list({
         async resolve(item: Lists.Order.Item, arg, context) {
           const payments = await context.query.Payment.findMany({
             where: { order: { id: { equals: item.id } } },
-            query: `sum status`,
+            query: `amount status`,
           });
           if (payments) {
             const successPayed = payments.filter(
               (item) => item.status === PaymentStatus.Successfully
             );
             return successPayed.reduce(
-              (tally, payment) => tally + payment.sum,
+              (tally, payment) => tally + payment.amount,
               0
             );
           }
@@ -109,14 +86,14 @@ export const Order = list({
         async resolve(item: Lists.Order.Item, arg, context) {
           const payments = await context.query.Payment.findMany({
             where: { order: { id: { equals: item.id } } },
-            query: `sum status`,
+            query: `amount status`,
           });
           if (payments) {
             const successPayed = payments.filter(
               (item) => item.status === PaymentStatus.Successfully
             );
             const payed = successPayed.reduce(
-              (tally, payment) => tally + payment.sum,
+              (tally, payment) => tally + payment.amount,
               0
             );
             if (item.amount) {
@@ -136,14 +113,14 @@ export const Order = list({
         async resolve(item: Lists.Order.Item, arg, context) {
           const payments = await context.query.Payment.findMany({
             where: { order: { id: { equals: item.id } } },
-            query: `sum status`,
+            query: `amount status`,
           });
           if (payments) {
             const successPayed = payments.filter(
               (item) => item.status === PaymentStatus.Successfully
             );
             const payed = successPayed.reduce(
-              (tally, payment) => tally + payment.sum,
+              (tally, payment) => tally + payment.amount,
               0
             );
             if (item.amount && item.leftPayments >= 1) {
@@ -166,15 +143,6 @@ export const Order = list({
       create: ({ session }) => !!session,
       update: ({ session }) => !!session,
       delete: ({ session }) => !!session,
-    },
-    filter: {
-      query: ({ session }) => filterCustomerAccess(session),
-      update: ({ session }) => filterCustomerAccess(session),
-      delete: ({ session }) => filterCustomerAccess(session),
-    },
-    item: {
-      create: ({ session, inputData }) =>
-        filterCustomerAccessCreate(session, inputData),
     },
   },
 });

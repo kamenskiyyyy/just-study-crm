@@ -1,58 +1,36 @@
 import "dotenv/config";
 import { config } from "@keystone-6/core";
 import { lists } from "./schemas/lists";
-import { statelessSessions } from "@keystone-6/core/session";
 import { createAuth } from "@keystone-6/auth";
-import { DATABASE_URL, FRONTEND_URL, SERVER_PORT } from "./config";
 import { storage } from "./config/storage";
-import { insertSeedData } from "./seed-data";
+import { db } from "./config/db";
+import { server } from "./config/server";
+import { session } from "./config/session";
+import { extendGraphqlSchema } from "./mutations";
 
 const { withAuth } = createAuth({
   listKey: "User",
   identityField: "email",
   secretField: "password",
   initFirstItem: { fields: ["name", "email", "phone", "role", "password"] },
+  magicAuthLink: {
+    sendToken: async ({ context, token, itemId }) => {
+      await context.query.User.updateOne({
+        where: { id: `${itemId}` },
+        data: { magicLinkToken: token },
+      });
+    },
+    tokensValidForMins: 60,
+  },
 });
 
 export default withAuth(
   config({
-    server: {
-      port: SERVER_PORT,
-      healthCheck: {
-        path: "/check",
-        data: () => ({
-          status: "healthy",
-          timestamp: Date.now(),
-          uptime: process.uptime(),
-        }),
-      },
-      cors: {
-        origin: [FRONTEND_URL],
-        credentials: true,
-      },
-    },
-    db: {
-      provider: "mysql",
-      url: DATABASE_URL,
-      idField: { kind: "autoincrement" },
-      async onConnect(context) {
-        if (process.argv.includes("--seed-data")) {
-          await insertSeedData(context);
-        } else {
-          return;
-        }
-      },
-    },
-    experimental: {
-      enableNextJsGraphqlApiEndpoint: true,
-      generateNextGraphqlAPI: true,
-      generateNodeAPI: true,
-    },
+    server,
+    db,
     lists,
     storage,
-    session: statelessSessions({
-      secret: "3494c9e4-49c1-4834-9f4e-6b14baabb5d3",
-      maxAge: 60 * 60 * 24,
-    }),
+    session,
+    extendGraphqlSchema,
   })
 );

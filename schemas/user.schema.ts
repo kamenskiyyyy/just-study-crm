@@ -8,7 +8,7 @@ import {
 } from "@keystone-6/core/fields";
 import { RolesValues } from "../consts/roles.const";
 import { Roles } from "../enums/roles.enum";
-import { filterCustomerAccess, filterCustomerAccessCreate } from "../shared";
+import { filterCustomerAccess } from "../shared";
 import { ClientStatusOptionsConst } from "../consts/client-status-options.const";
 import { ClientStatus } from "../enums/client-status.emum";
 import { LevelStudentOptions } from "../consts/level-student-options.const";
@@ -16,7 +16,7 @@ import { LevelStudent } from "../enums/level-student.enum";
 import { language } from "../fields/language";
 import { createdAt } from "../fields/createdAt";
 import { lastModification } from "../fields/lastModification";
-import { notifyNewClient } from "../lib/nodemailer";
+import { notifyNewClient } from "../notifications/createdLead";
 
 export const User = list({
   ui: {
@@ -86,23 +86,25 @@ export const User = list({
       type: "enum",
       options: RolesValues,
       defaultValue: Roles.Student,
+      validation: { isRequired: true },
     }),
-    comment: text(),
+    comment: text({
+      ui: { displayMode: "textarea" },
+      db: { nativeType: "VarChar(10000)" },
+    }),
+    cart: relationship({ ref: "Cart.user" }),
+    magicLinkToken: text({
+      ui: { listView: "read", itemView: "read", createView: "hidden" },
+    }),
     createdAt,
     lastModification,
   },
   access: {
     operation: {
-      update: ({ session }) => !!session,
       delete: ({ session }) => !!session,
     },
     filter: {
-      update: ({ session }) => filterCustomerAccess(session),
       delete: ({ session }) => filterCustomerAccess(session),
-    },
-    item: {
-      update: ({ session, inputData }) =>
-        filterCustomerAccessCreate(session, inputData),
     },
   },
   hooks: {

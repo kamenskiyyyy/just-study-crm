@@ -1,4 +1,4 @@
-import { Roles } from "@enums/roles.enum";
+import { Roles } from "../enums/roles.enum";
 
 export interface SessionObj {
   data: {
